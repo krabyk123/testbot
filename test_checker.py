@@ -246,8 +246,15 @@ def test_vkplay(url):
                 ""
             )
         else:
-            online = bool(data.get("data", {}).get("isOnline"))
-            title  = data.get("data", {}).get("title", "")
+            inner = data.get("data", {})
+            # data["data"] может быть списком или словарём
+            if isinstance(inner, list):
+                online = any(item.get("isOnline") for item in inner if isinstance(item, dict))
+                title  = next((item.get("title", "") for item in inner
+                               if isinstance(item, dict) and item.get("isOnline")), "")
+            else:
+                online = bool(inner.get("isOnline"))
+                title  = inner.get("title", "")
 
         if online:
             print(f"  {GREEN}Стрим: {title}{RESET}")
