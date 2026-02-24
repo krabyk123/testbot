@@ -94,17 +94,31 @@ def handle(user_id: int, text: str, payload: dict | None):
          keyboard=build_keyboard(user_id))
 
 
+# Платформы которые шлют уведомления пользователям
+NOTIFY_PLATFORMS = {"twitch", "youtube", "kick", "vkplay"}
+
 def check_loop():
     log.info("Checker started (interval=%ds)", config.CHECK_INTERVAL_SECONDS)
     while True:
         try:
             for streamer in config.STREAMERS:
                 results = check_streamer(streamer)
+
+                # Определяем — стримит ли он хоть где-то на реальных площадках
+                is_streaming = any(
+                    r["is_live"] for r in results
+                    if r["platform"] in NOTIFY_PLATFORMS
+                )
+
                 for res in results:
                     pid  = res["platform"]
                     live = res["is_live"]
                     was  = db.get_live(streamer["id"], pid)
-                    if live and not was:
+
+                    # Уведомляем только если:
+                    # 1. Это реальная стрим-площадка (не TG/ВК группа)
+                    # 2. Статус изменился с офлайн на онлайн
+                    if pid in NOTIFY_PLATFORMS and live and not was:
                         parts = res["icon"].split(" ", 1)
                         text = config.MSG_LIVE.format(
                             name=streamer["name"],
@@ -116,7 +130,11 @@ def check_loop():
                         log.info("LIVE %s/%s → %d users", streamer["id"], pid, len(users))
                         for uid in users:
                             send(uid, text)
+
+                    # Для TG и ВК группы — обновляем состояние только если
+                    # не было таймаута (ошибки уже залогированы в checker.py)
                     db.set_live(streamer["id"], pid, live)
+
         except Exception as e:
             log.error("check_loop: %s", e)
         time.sleep(config.CHECK_INTERVAL_SECONDS)
