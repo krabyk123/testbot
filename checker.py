@@ -165,20 +165,21 @@ def check_vkplay(url: str) -> bool:
         )
         data = r.json()
 
-        # API может вернуть словарь {"data": {...}} ИЛИ список [...]
-        if isinstance(data, list):
-            # Ищем запись с isOnline=True среди элементов списка
+        # data может быть словарём {"data": {...}} или {"data": [...]}
+        inner = data.get("data", {}) if isinstance(data, dict) else data
+
+        if isinstance(inner, list):
             return any(
-                item.get("isOnline") or item.get("data", {}).get("isOnline")
-                for item in data if isinstance(item, dict)
+                item.get("isOnline") for item in inner
+                if isinstance(item, dict)
             )
-        elif isinstance(data, dict):
-            return bool(data.get("data", {}).get("isOnline"))
+        elif isinstance(inner, dict):
+            return bool(inner.get("isOnline"))
 
     except Exception:
         pass
 
-    # Fallback: HTML
+    # Fallback HTML
     try:
         r = S.get(url, timeout=15)
         return "StreamStatus_isOnline" in r.text or '"isOnline":true' in r.text
